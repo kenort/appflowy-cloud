@@ -7,3 +7,5 @@ deploy/
 tests/
 docker/Dockerfile
 scripts/
+cloudflare/node_modules
+cloudflare/.wrangler

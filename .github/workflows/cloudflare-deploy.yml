@@ -1,0 +1,96 @@
+name: Deploy to Cloudflare
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "libs/**"
+      - "services/**"
+      - "migrations/**"
+      - "Cargo.*"
+      - "cloudflare/**"
+      - ".github/workflows/cloudflare-deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      APPFLOWY_DOMAIN: ${{ vars.APPFLOWY_DOMAIN }}
+      IMAGE_TAG: appflowy-backend:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check configuration
+        run: |
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID APPFLOWY_DOMAIN; do
+            [ -n "${!v}" ] || { echo "::error::Falta $v (ver cloudflare/README.md)"; exit 1; }
+          done
+
+      # La compilación de Rust necesita bastante disco
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image (linux/amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: cloudflare/container/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloudflare/package-lock.json
+
+      - name: Install Worker dependencies
+        working-directory: cloudflare
+        run: npm ci
+
+      - name: Push image to Cloudflare registry
+        working-directory: cloudflare
+        run: npx wrangler containers push "$IMAGE_TAG"
+
+      - name: Fill wrangler.jsonc
+        working-directory: cloudflare
+        run: |
+          IMAGE="registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/${IMAGE_TAG}"
+          sed -i \
+            -e "s|__APPFLOWY_DOMAIN__|${APPFLOWY_DOMAIN}|g" \
+            -e "s|__IMAGE__|${IMAGE}|g" \
+            -e "s|__R2_ACCOUNT_ID__|${CLOUDFLARE_ACCOUNT_ID}|g" \
+            wrangler.jsonc
+
+      - name: Deploy Worker + container
+        working-directory: cloudflare
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOTRUE_JWT_SECRET: ${{ secrets.GOTRUE_JWT_SECRET }}
+          GOTRUE_ADMIN_EMAIL: ${{ secrets.GOTRUE_ADMIN_EMAIL }}
+          GOTRUE_ADMIN_PASSWORD: ${{ secrets.GOTRUE_ADMIN_PASSWORD }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          APPFLOWY_USERS: ${{ secrets.APPFLOWY_USERS }}
+          AI_OPENAI_API_KEY: ${{ secrets.AI_OPENAI_API_KEY }}
+        run: |
+          SECRETS="$RUNNER_TEMP/secrets.json"
+          jq -n 'env | {DATABASE_URL, GOTRUE_JWT_SECRET, GOTRUE_ADMIN_EMAIL, GOTRUE_ADMIN_PASSWORD,
+                        R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, APPFLOWY_USERS, AI_OPENAI_API_KEY}
+                 | with_entries(select(.value != null and .value != ""))' > "$SECRETS"
+          npx wrangler deploy --secrets-file "$SECRETS"
+          rm -f "$SECRETS"

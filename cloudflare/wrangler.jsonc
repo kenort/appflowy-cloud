@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "appflowy",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+
+  // GitHub Actions reemplaza __APPFLOWY_DOMAIN__, __IMAGE__ y __R2_ACCOUNT_ID__.
+  "routes": [{ "pattern": "__APPFLOWY_DOMAIN__", "custom_domain": true }],
+
+  "containers": [
+    {
+      "class_name": "AppflowyBackend",
+      "image": "__IMAGE__",
+      // 1 GiB RAM, 1/4 vCPU. Si se queda corto: "standard-1" (4 GiB).
+      "instance_type": "basic",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "BACKEND", "class_name": "AppflowyBackend" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AppflowyBackend"] }],
+
+  "vars": {
+    "APPFLOWY_BASE_URL": "https://__APPFLOWY_DOMAIN__",
+    "R2_ACCOUNT_ID": "__R2_ACCOUNT_ID__",
+    "R2_BUCKET": "appflowy",
+    // Ponlo en "false" para que alguien se registre desde la app.
+    "GOTRUE_DISABLE_SIGNUP": "true",
+    "RUST_LOG": "info"
+  }
+}
