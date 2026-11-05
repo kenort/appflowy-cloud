@@ -35,6 +35,9 @@ SELECT CASE WHEN current_setting('server_version_num')::int >= 160000
   THEN 'GRANT gotrue_auth TO CURRENT_USER WITH INHERIT TRUE, SET TRUE'
   ELSE 'GRANT gotrue_auth TO CURRENT_USER' END \gexec
 CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION gotrue_auth;
+-- gotrue ejecuta "CREATE SCHEMA IF NOT EXISTS auth" y Postgres exige CREATE
+-- sobre la base aunque el esquema ya exista.
+SELECT format('GRANT CREATE ON DATABASE %I TO gotrue_auth', current_database()) \gexec
 
 SELECT 'estado: auth=' || (SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname = 'auth')
   || ' tablas_auth=' || (SELECT count(*) FROM pg_tables WHERE schemaname = 'auth')
