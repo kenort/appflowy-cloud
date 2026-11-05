@@ -25,9 +25,13 @@ export interface Env {
   AI_OPENAI_API_KEY?: string;
 }
 
-function withSearchPath(url: string, schema: string): string {
+// Neon añade channel_binding=require, que gotrue y sqlx no reconocen
+// (lo envían a Postgres como parámetro y la conexión falla).
+function cleanDatabaseUrl(url: string, searchPath?: string): string {
   const u = new URL(url);
-  u.searchParams.set("search_path", schema);
+  u.searchParams.delete("channel_binding");
+  u.searchParams.set("sslmode", "require");
+  if (searchPath) u.searchParams.set("search_path", searchPath);
   return u.toString();
 }
 
@@ -46,7 +50,8 @@ export class AppflowyBackend extends Container<Env> {
       APPFLOWY_ENVIRONMENT: "production",
       APPFLOWY_BASE_URL: baseUrl,
       APPFLOWY_WEB_URL: baseUrl,
-      APPFLOWY_DATABASE_URL: env.DATABASE_URL,
+      APPFLOWY_DATABASE_URL: cleanDatabaseUrl(env.DATABASE_URL),
+      APPFLOWY_DATABASE_REQUIRE_SSL: "true",
       APPFLOWY_DATABASE_MAX_CONNECTIONS: "10",
       APPFLOWY_REDIS_URI: "redis://127.0.0.1:6379",
       APPFLOWY_ACCESS_CONTROL: "true",
@@ -67,7 +72,7 @@ export class AppflowyBackend extends Container<Env> {
 
       // GoTrue
       PORT: String(GOTRUE_PORT),
-      DATABASE_URL: withSearchPath(env.DATABASE_URL, "auth"),
+      DATABASE_URL: cleanDatabaseUrl(env.DATABASE_URL, "auth"),
       GOTRUE_DB_DRIVER: "postgres",
       API_EXTERNAL_URL: `${baseUrl}/gotrue`,
       GOTRUE_SITE_URL: "appflowy-flutter://",
