@@ -28,9 +28,13 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'gotrue_auth') \gexec
 SELECT format('ALTER ROLE gotrue_auth PASSWORD %L', :'auth_pw') \gexec
 
 ALTER ROLE gotrue_auth SET search_path = auth;
+-- El dueño de la base necesita ser miembro de gotrue_auth: para crear el
+-- esquema a su nombre y porque appflowy_cloud crea triggers en auth.users.
+-- Desde Postgres 16 hay que pedir SET e INHERIT explícitamente.
+SELECT CASE WHEN current_setting('server_version_num')::int >= 160000
+  THEN 'GRANT gotrue_auth TO CURRENT_USER WITH INHERIT TRUE, SET TRUE'
+  ELSE 'GRANT gotrue_auth TO CURRENT_USER' END \gexec
 CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION gotrue_auth;
--- appflowy_cloud (dueño de la base) crea triggers y consulta auth.users
-GRANT gotrue_auth TO CURRENT_USER;
 
 SELECT 'estado: auth=' || (SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname = 'auth')
   || ' tablas_auth=' || (SELECT count(*) FROM pg_tables WHERE schemaname = 'auth')
