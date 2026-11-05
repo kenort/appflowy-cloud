@@ -164,10 +164,16 @@ async function recordRequest(
   routed: boolean,
 ): Promise<void> {
   const body = copy ? (await copy.text()).slice(0, 500) : "";
+  // El websocket lleva el JWT de la sesión en la URL
+  const query = new URLSearchParams(url.search);
+  for (const key of ["token", "access_token", "refresh_token"]) {
+    if (query.has(key)) query.set(key, "***");
+  }
+  const search = query.size ? `?${query}` : "";
   await log.record({
     time: new Date().toISOString(),
     method: request.method,
-    path: url.pathname + url.search,
+    path: url.pathname + search,
     status,
     routed,
     body,
