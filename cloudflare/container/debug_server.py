@@ -9,7 +9,7 @@ import threading
 SECRET_VARS = [
     "DATABASE_URL", "APPFLOWY_DATABASE_URL", "GOTRUE_JWT_SECRET",
     "APPFLOWY_GOTRUE_JWT_SECRET", "GOTRUE_ADMIN_PASSWORD", "APPFLOWY_S3_ACCESS_KEY",
-    "APPFLOWY_S3_SECRET_KEY", "AI_OPENAI_API_KEY", "APPFLOWY_USERS", "DEBUG_TOKEN",
+    "APPFLOWY_S3_SECRET_KEY", "AI_OPENAI_API_KEY", "APPFLOWY_USERS", "DEBUG_TOKEN", "AUTH_PW",
 ]
 
 token = os.environ["DEBUG_TOKEN"]
@@ -47,6 +47,10 @@ class Server(http.server.ThreadingHTTPServer):
 
 for port in (9999, 8000):
     server = Server(("::", port), Handler)
-    t = threading.Thread(target=server.serve_forever)
+    t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
-t.join()
+
+# Termina a los 10 min para que Cloudflare reinicie el contenedor (y tome
+# una versión nueva si se desplegó otra mientras tanto).
+threading.Event().wait(600)
+os._exit(1)

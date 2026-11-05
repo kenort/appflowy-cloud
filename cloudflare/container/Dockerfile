@@ -32,7 +32,7 @@ RUN CGO_ENABLED=0 go build -o /auth .
 # ---------- runtime ----------
 FROM debian:bookworm-slim
 RUN apt-get update -y \
-  && apt-get install -y --no-install-recommends ca-certificates curl openssl redis-server python3 \
+  && apt-get install -y --no-install-recommends ca-certificates curl openssl redis-server python3 postgresql-client \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -41,6 +41,7 @@ COPY --from=gotrue /auth /app/gotrue/auth
 COPY --from=gotrue /src/migrations /app/gotrue/migrations
 COPY cloudflare/container/start.sh /app/start.sh
 COPY cloudflare/container/debug_server.py /app/debug_server.py
+COPY cloudflare/container/prepare_db.sql /app/prepare_db.sql
 RUN chmod +x /app/start.sh
 
 ENV APP_ENVIRONMENT=production

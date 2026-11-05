@@ -20,6 +20,21 @@ redis-server --bind 127.0.0.1 --port 6379 --save "" --appendonly no --maxmemory 
   --maxmemory-policy noeviction &
 REDIS_PID=$!
 
+# gotrue usa su propio rol (gotrue_auth) con search_path=auth fijado en
+# Postgres; ver prepare_db.sql. La clave se deriva del JWT secret.
+echo "[start] preparando base de datos"
+export AUTH_PW
+AUTH_PW=$(printf '%s' "gotrue_auth:${GOTRUE_JWT_SECRET}" | sha256sum | cut -c1-48)
+psql "$APPFLOWY_DATABASE_URL" -X -q -v auth_pw="$AUTH_PW" -f /app/prepare_db.sql \
+  || fail "preparar base de datos"
+DATABASE_URL=$(python3 -c '
+import os, urllib.parse as u
+p = u.urlsplit(os.environ["DATABASE_URL"])
+host = p.hostname + (":%d" % p.port if p.port else "")
+print(u.urlunsplit(p._replace(netloc="gotrue_auth:" + os.environ["AUTH_PW"] + "@" + host)))
+') || fail "URL de gotrue"
+export DATABASE_URL
+
 cd /app/gotrue
 echo "[start] gotrue: migraciones"
 ./auth migrate || fail "gotrue migrate"
