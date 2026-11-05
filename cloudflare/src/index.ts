@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { Container, switchPort } from "@cloudflare/containers";
+import { invitePage, isInvitePath } from "./invite_page";
 
 // Puertos dentro del contenedor (ver container/start.sh)
 const APPFLOWY_PORT = 8000;
@@ -166,6 +167,11 @@ async function route(
 
   if (url.pathname.startsWith("/api") || url.pathname.startsWith("/ws")) {
     return { response: await backend.fetch(switchPort(request, APPFLOWY_PORT)), routed: true };
+  }
+
+  // Aceptar invitaciones (sustituye a las páginas de AppFlowy-Web)
+  if (isInvitePath(url.pathname)) {
+    return { response: invitePage(), routed: true };
   }
 
   return { response: new Response("AppFlowy Cloud", { status: 200 }), routed: false };
