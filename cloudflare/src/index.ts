@@ -115,6 +115,12 @@ export default {
       return backend.fetch(switchPort(new Request(url, request), GOTRUE_PORT));
     }
 
+    // Las apps recientes comprueban /api/health; este servidor lo tiene en /health
+    if (url.pathname === "/api/health" || url.pathname === "/health") {
+      url.pathname = "/health";
+      return backend.fetch(switchPort(new Request(url, request), APPFLOWY_PORT));
+    }
+
     if (url.pathname.startsWith("/api") || url.pathname.startsWith("/ws")) {
       return backend.fetch(switchPort(request, APPFLOWY_PORT));
     }
