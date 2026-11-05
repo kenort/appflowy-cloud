@@ -28,8 +28,12 @@ export interface Env {
 
 // Neon añade channel_binding=require, que gotrue y sqlx no reconocen
 // (lo envían a Postgres como parámetro y la conexión falla).
+// Además el pooler de Neon (host "-pooler") descarta search_path, y las
+// migraciones de gotrue crean tipos sin esquema que acaban en "public":
+// siempre se usa la conexión directa.
 function cleanDatabaseUrl(url: string, searchPath?: string): string {
   const u = new URL(url);
+  u.hostname = u.hostname.replace("-pooler.", ".");
   u.searchParams.delete("channel_binding");
   u.searchParams.set("sslmode", "require");
   if (searchPath) u.searchParams.set("search_path", searchPath);
