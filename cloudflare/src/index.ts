@@ -4,6 +4,7 @@ import { Container, switchPort } from "@cloudflare/containers";
 // Puertos dentro del contenedor (ver container/start.sh)
 const APPFLOWY_PORT = 8000;
 const GOTRUE_PORT = 9999;
+const LOG_PORT = 8001;
 
 export interface Env {
   BACKEND: DurableObjectNamespace<AppflowyBackend>;
@@ -114,6 +115,21 @@ export default {
     if (env.DEBUG_TOKEN && url.pathname === `/api/${env.DEBUG_TOKEN}/requests`) {
       return Response.json(await log.list());
     }
+    // Fuerza el reinicio del contenedor (p. ej. para tomar una imagen recién
+    // desplegada aunque haya clientes conectados que no lo dejan dormir)
+    if (
+      env.DEBUG_TOKEN &&
+      request.method === "POST" &&
+      url.pathname === `/api/${env.DEBUG_TOKEN}/restart`
+    ) {
+      await env.BACKEND.getByName("main").destroy();
+      return new Response("reiniciado\n");
+    }
+    // Salida de redis/gotrue/appflowy_cloud (container/debug_server.py, modo live)
+    if (env.DEBUG_TOKEN && url.pathname === `/api/${env.DEBUG_TOKEN}/server-log`) {
+      const backend = env.BACKEND.getByName("main");
+      return backend.fetch(switchPort(request, LOG_PORT));
+    }
 
     const { response, routed } = await route(request, url, env);
     // Peticiones fallidas o que el Worker no sabe a dónde mandar
@@ -176,6 +192,7 @@ async function recordRequest(
     path: url.pathname + search,
     status,
     routed,
+    clientVersion: request.headers.get("client-version") ?? "",
     body,
   });
 }
@@ -186,10 +203,11 @@ interface LoggedRequest {
   path: string;
   status: number;
   routed: boolean;
+  clientVersion: string;
   body: string;
 }
 
-// Últimas 200 peticiones fallidas; se consultan en /api/<DEBUG_TOKEN>/requests
+// Últimas 1000 peticiones fallidas; se consultan en /api/<DEBUG_TOKEN>/requests
 export class RequestLog extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -201,7 +219,7 @@ export class RequestLog extends DurableObject<Env> {
   async record(entry: LoggedRequest): Promise<void> {
     const sql = this.ctx.storage.sql;
     sql.exec("INSERT INTO requests (entry) VALUES (?)", JSON.stringify(entry));
-    sql.exec("DELETE FROM requests WHERE id <= (SELECT max(id) - 200 FROM requests)");
+    sql.exec("DELETE FROM requests WHERE id <= (SELECT max(id) - 1000 FROM requests)");
   }
 
   async list(): Promise<LoggedRequest[]> {

@@ -15,6 +15,10 @@ fail() {
   exit 1
 }
 
+if [ -n "${DEBUG_TOKEN:-}" ]; then
+  python3 /app/debug_server.py live &
+fi
+
 # Redis solo en memoria: cola de mensajes en tiempo real, los datos viven en Postgres.
 redis-server --bind 127.0.0.1 --port 6379 --save "" --appendonly no --maxmemory 128mb \
   --maxmemory-policy noeviction &
