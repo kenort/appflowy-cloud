@@ -62,10 +62,7 @@ jobs:
         working-directory: cloudflare
         run: npm ci
 
-      - name: Push image to Cloudflare registry
-        working-directory: cloudflare
-        run: npx wrangler containers push "$IMAGE_TAG"
-
+      # wrangler valida wrangler.jsonc también al hacer push, así que va antes
       - name: Fill wrangler.jsonc
         working-directory: cloudflare
         run: |
@@ -75,6 +72,10 @@ jobs:
             -e "s|__IMAGE__|${IMAGE}|g" \
             -e "s|__R2_ACCOUNT_ID__|${CLOUDFLARE_ACCOUNT_ID}|g" \
             wrangler.jsonc
+
+      - name: Push image to Cloudflare registry
+        working-directory: cloudflare
+        run: npx wrangler containers push "$IMAGE_TAG"
 
       - name: Deploy Worker + container
         working-directory: cloudflare
