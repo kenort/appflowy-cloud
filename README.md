@@ -1,3 +1,8 @@
+> [!NOTE]
+> **Fork no oficial** de [AppFlowy-Cloud](https://github.com/AppFlowy-IO/AppFlowy-Cloud) (AGPL-3.0), adaptado para desplegarse en Cloudflare Containers. No está afiliado ni respaldado por AppFlowy Pte. Ltd.; "AppFlowy" es marca de sus titulares.
+>
+> Cambios respecto al original (noviembre 2026): carpeta [`cloudflare/`](cloudflare/README.md) (Worker, contenedor y guía), workflow [`.github/workflows/cloudflare-deploy.yml`](.github/workflows/cloudflare-deploy.yml), y workflows originales movidos a `.github/workflows-upstream/`. El código del servidor no se ha modificado.
+
 <p align="center">
     <picture>
         <source srcset="assets/logos/appflowy_logo_white.svg" media="(prefers-color-scheme: dark)"/>
