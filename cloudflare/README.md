@@ -26,11 +26,16 @@ Worker "appflowy"  (cloudflare/src/index.ts)
 ## 1. Neon (Postgres)
 
 1. Crea un proyecto en <https://neon.tech> (plan Free), en la región más cercana a ti.
-2. En **Connect**, desactiva **Connection pooling** y copia la cadena de conexión **directa** (sin `-pooler` en el host):
+2. En **Connect**, copia la cadena de conexión:
    ```
    postgresql://usuario:clave@ep-xxxx.region.aws.neon.tech/neondb?sslmode=require
    ```
    Será el secreto `DATABASE_URL`. Las tablas, el esquema `auth` y la extensión pgvector se crean solas en el primer arranque.
+
+   No hace falta limpiarla. El Worker ya se ocupa de esto:
+   - Usa siempre la conexión directa: quita `-pooler` del host.
+   - Quita el parámetro `channel_binding`, que gotrue no entiende.
+   - Crea un rol propio para gotrue (`gotrue_auth`) con `search_path=auth`, porque Neon ignora el `search_path` que se manda al conectar. Ver `container/prepare_db.sql`.
 
 ## 2. R2 (archivos)
 
@@ -92,10 +97,23 @@ La primera compilación de Rust tarda entre 40 y 60 min. Las siguientes usan cac
 Para comprobar que funciona:
 
 ```bash
-curl https://appflowy.tudominio.com/api/health
+curl https://appflowy.tudominio.com/api/server
+curl https://appflowy.tudominio.com/gotrue/health
 ```
 
-La primera petición despierta el contenedor y puede tardar entre 10 y 30 s.
+Los dos deben devolver JSON. La primera petición despierta el contenedor y puede tardar entre 10 y 30 s.
+
+Cloudflare mantiene vivo el contenedor mientras recibe peticiones, así que después de desplegar puede seguir respondiendo la versión anterior hasta 15 min.
+
+### Si el contenedor no arranca
+
+Con el secreto opcional `DEBUG_TOKEN`, un arranque fallido no termina el contenedor. Durante 10 min sirve su log, con las claves ocultas, en:
+
+```
+https://appflowy.tudominio.com/api/<DEBUG_TOKEN>/log.txt
+```
+
+Sin ese secreto, el contenedor simplemente termina y Cloudflare lo reinicia.
 
 ## 6. Conectar la app
 
