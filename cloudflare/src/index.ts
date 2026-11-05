@@ -23,6 +23,7 @@ export interface Env {
   R2_SECRET_ACCESS_KEY: string;
   APPFLOWY_USERS?: string;
   AI_OPENAI_API_KEY?: string;
+  DEBUG_TOKEN?: string;
 }
 
 // Neon añade channel_binding=require, que gotrue y sqlx no reconocen
@@ -92,6 +93,9 @@ export class AppflowyBackend extends Container<Env> {
 
       // "email:password,email2:password2" -> cuentas creadas al arrancar
       APPFLOWY_USERS: env.APPFLOWY_USERS ?? "",
+
+      // Si existe, un arranque fallido sirve su log en /api/<token>/log.txt
+      DEBUG_TOKEN: env.DEBUG_TOKEN ?? "",
     };
   }
 }

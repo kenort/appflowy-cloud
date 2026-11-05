@@ -88,10 +88,11 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           APPFLOWY_USERS: ${{ secrets.APPFLOWY_USERS }}
           AI_OPENAI_API_KEY: ${{ secrets.AI_OPENAI_API_KEY }}
+          DEBUG_TOKEN: ${{ secrets.DEBUG_TOKEN }}
         run: |
           SECRETS="$RUNNER_TEMP/secrets.json"
           jq -n 'env | {DATABASE_URL, GOTRUE_JWT_SECRET, GOTRUE_ADMIN_EMAIL, GOTRUE_ADMIN_PASSWORD,
-                        R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, APPFLOWY_USERS, AI_OPENAI_API_KEY}
+                        R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, APPFLOWY_USERS, AI_OPENAI_API_KEY, DEBUG_TOKEN}
                  | with_entries(select(.value != null and .value != ""))' > "$SECRETS"
           npx wrangler deploy --secrets-file "$SECRETS"
           rm -f "$SECRETS"
