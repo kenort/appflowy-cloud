@@ -1,3 +1,4 @@
+import { DurableObject } from "cloudflare:workers";
 import { Container, switchPort } from "@cloudflare/containers";
 
 // Puertos dentro del contenedor (ver container/start.sh)
@@ -6,6 +7,7 @@ const GOTRUE_PORT = 9999;
 
 export interface Env {
   BACKEND: DurableObjectNamespace<AppflowyBackend>;
+  REQUEST_LOG: DurableObjectNamespace<RequestLog>;
 
   // Variables (wrangler.jsonc -> vars)
   APPFLOWY_BASE_URL: string;
@@ -105,26 +107,101 @@ export class AppflowyBackend extends Container<Env> {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    const backend = env.BACKEND.getByName("main");
+    const log = env.REQUEST_LOG.getByName("main");
 
-    // /gotrue/* -> gotrue (sin el prefijo), igual que nginx/nginx.conf
-    if (url.pathname.startsWith("/gotrue/")) {
-      url.pathname = url.pathname.slice("/gotrue".length);
-      return backend.fetch(switchPort(new Request(url, request), GOTRUE_PORT));
+    if (env.DEBUG_TOKEN && url.pathname === `/api/${env.DEBUG_TOKEN}/requests`) {
+      return Response.json(await log.list());
     }
 
-    // Las apps recientes comprueban /api/health; este servidor lo tiene en /health
-    if (url.pathname === "/api/health" || url.pathname === "/health") {
-      url.pathname = "/health";
-      return backend.fetch(switchPort(new Request(url, request), APPFLOWY_PORT));
+    const { response, routed } = await route(request, url, env);
+    // Peticiones fallidas o que el Worker no sabe a dónde mandar
+    if (response.status >= 400 || !routed) {
+      const copy = response.status !== 101 && response.body ? response.clone() : null;
+      ctx.waitUntil(recordRequest(log, request, url, response.status, copy, routed));
     }
-
-    if (url.pathname.startsWith("/api") || url.pathname.startsWith("/ws")) {
-      return backend.fetch(switchPort(request, APPFLOWY_PORT));
-    }
-
-    return new Response("AppFlowy Cloud", { status: 200 });
+    return response;
   },
 } satisfies ExportedHandler<Env>;
+
+async function route(
+  request: Request,
+  url: URL,
+  env: Env,
+): Promise<{ response: Response; routed: boolean }> {
+  const backend = env.BACKEND.getByName("main");
+
+  // /gotrue/* -> gotrue (sin el prefijo), igual que nginx/nginx.conf
+  if (url.pathname.startsWith("/gotrue/")) {
+    const target = new URL(url);
+    target.pathname = url.pathname.slice("/gotrue".length);
+    const response = await backend.fetch(switchPort(new Request(target, request), GOTRUE_PORT));
+    return { response, routed: true };
+  }
+
+  // Las apps recientes comprueban /api/health; este servidor lo tiene en /health
+  if (url.pathname === "/api/health" || url.pathname === "/health") {
+    const target = new URL(url);
+    target.pathname = "/health";
+    const response = await backend.fetch(switchPort(new Request(target, request), APPFLOWY_PORT));
+    return { response, routed: true };
+  }
+
+  if (url.pathname.startsWith("/api") || url.pathname.startsWith("/ws")) {
+    return { response: await backend.fetch(switchPort(request, APPFLOWY_PORT)), routed: true };
+  }
+
+  return { response: new Response("AppFlowy Cloud", { status: 200 }), routed: false };
+}
+
+async function recordRequest(
+  log: DurableObjectStub<RequestLog>,
+  request: Request,
+  url: URL,
+  status: number,
+  copy: Response | null,
+  routed: boolean,
+): Promise<void> {
+  const body = copy ? (await copy.text()).slice(0, 500) : "";
+  await log.record({
+    time: new Date().toISOString(),
+    method: request.method,
+    path: url.pathname + url.search,
+    status,
+    routed,
+    body,
+  });
+}
+
+interface LoggedRequest {
+  time: string;
+  method: string;
+  path: string;
+  status: number;
+  routed: boolean;
+  body: string;
+}
+
+// Últimas 200 peticiones fallidas; se consultan en /api/<DEBUG_TOKEN>/requests
+export class RequestLog extends DurableObject<Env> {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS requests (id INTEGER PRIMARY KEY AUTOINCREMENT, entry TEXT NOT NULL)",
+    );
+  }
+
+  async record(entry: LoggedRequest): Promise<void> {
+    const sql = this.ctx.storage.sql;
+    sql.exec("INSERT INTO requests (entry) VALUES (?)", JSON.stringify(entry));
+    sql.exec("DELETE FROM requests WHERE id <= (SELECT max(id) - 200 FROM requests)");
+  }
+
+  async list(): Promise<LoggedRequest[]> {
+    return this.ctx.storage.sql
+      .exec<{ entry: string }>("SELECT entry FROM requests ORDER BY id DESC")
+      .toArray()
+      .map((row) => JSON.parse(row.entry));
+  }
+}

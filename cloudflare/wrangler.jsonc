@@ -18,9 +18,15 @@
     }
   ],
   "durable_objects": {
-    "bindings": [{ "name": "BACKEND", "class_name": "AppflowyBackend" }]
+    "bindings": [
+      { "name": "BACKEND", "class_name": "AppflowyBackend" },
+      { "name": "REQUEST_LOG", "class_name": "RequestLog" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AppflowyBackend"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["AppflowyBackend"] },
+    { "tag": "v2", "new_sqlite_classes": ["RequestLog"] }
+  ],
 
   "vars": {
     "APPFLOWY_BASE_URL": "https://__APPFLOWY_DOMAIN__",
