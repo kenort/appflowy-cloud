@@ -115,11 +115,31 @@ https://appflowy.tudominio.com/api/<DEBUG_TOKEN>/log.txt
 
 Sin ese secreto, el contenedor simplemente termina y Cloudflare lo reinicia.
 
+Con `DEBUG_TOKEN` también hay otras herramientas:
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/<DEBUG_TOKEN>/server-log?chars=20000` | Final del log de redis, gotrue y appflowy_cloud (secretos y JWT ocultos) |
+| `GET /api/<DEBUG_TOKEN>/requests` | Últimas 1000 peticiones fallidas (método, ruta, estado, `client-version`, inicio del cuerpo) |
+| `POST /api/<DEBUG_TOKEN>/restart` | Reinicia el contenedor. Sirve para tomar una imagen recién desplegada cuando hay clientes conectados que no lo dejan dormir |
+
 ## 6. Conectar la app
 
-En la app AppFlowy, ve a **Ajustes → Cloud → AppFlowy Cloud Self-hosted**, pon `https://appflowy.tudominio.com`, reinicia la app e inicia sesión con email y contraseña.
+**Usa AppFlowy 0.9.4** ([descargas](https://github.com/AppFlowy-IO/AppFlowy/releases/tag/0.9.4)) en escritorio y Android, y desactiva las actualizaciones automáticas.
 
-Este servidor dejó de actualizarse en septiembre de 2026. Si una versión nueva de la app no conecta, usa una versión de la app de esa época.
+Es la última versión compilada desde código público. Las versiones 0.10 en adelante se compilan con código privado de AppFlowy para su servidor comercial: llaman a APIs que este servidor no tiene (`/view/{id}/navigation`, `/server-info`…), y no se pueden crear ni guardar páginas. Los tags públicos de esas versiones apuntan casi al mismo commit, así que el código del repo no lo refleja. En iOS, la App Store solo ofrece la última versión, que no es compatible.
+
+En la app, ve a **Ajustes → Cloud → AppFlowy Cloud Self-hosted**, pon `https://appflowy.tudominio.com`, reinicia la app e inicia sesión con email y contraseña. Si antes usaste una versión más nueva, borra primero sus datos locales.
+
+## 7. Invitar a otras personas
+
+1. Crea su cuenta en `APPFLOWY_USERS` y vuelve a desplegar. La persona inicia sesión una vez en la app.
+2. En **Settings → Members**, copia el enlace de invitación (**Copy link**) y envíaselo.
+3. La persona abre el enlace en el navegador, inicia sesión y acepta. Luego reinicia la app.
+
+AppFlowy manda esos enlaces (y los del correo de invitación) a su app web, que no se despliega aquí. Por eso el Worker sirve su propia página para aceptar invitaciones (`src/invite_page.ts`). Las invitaciones por email se pueden aceptar en `https://appflowy.tudominio.com/invitaciones`.
+
+Para compartir contenido, crea espacios con permiso **Público**.
 
 ## Logs y costes
 
